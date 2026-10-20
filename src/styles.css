@@ -160,3 +160,10 @@ pre { margin: 0; background: var(--bg); padding: 10px; border-radius: 6px; overf
 .issues li { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
 .issues .dot { width: 8px; height: 8px; border-radius: 99px; flex: none; position: relative; top: -1px; }
 .ok { color: var(--ok); margin: 0; }
+
+.when.shotStart { font-weight: 600; color: var(--ink); }
+.settings .grow { flex: 1 1 260px; }
+.tasks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 8px; font-size: 13px; }
+.panel textarea { width: 100%; }
+.panel h3 + textarea, .panel label.small { display: block; margin-bottom: 8px; }
+.compiled p { margin: 0; white-space: pre-wrap; }

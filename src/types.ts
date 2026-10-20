@@ -1,17 +1,7 @@
-export type ModeId = 't2v' | 'i2v' | 'flf' | 'ref2v';
+/** The five input modes named by the h3-prompt-writing skill. */
+export type ModeId = 't2va' | 'i2va' | 'fl2va' | 'l2va' | 'ref2va';
 export type AssetKind = 'image' | 'video' | 'audio';
-export type RowType =
-  | 'subject'
-  | 'action'
-  | 'camera'
-  | 'light'
-  | 'sound'
-  | 'reference'
-  | 'limits'
-  | 'raw'
-  | 'comment';
-export type Provider = 'magnific' | 'evolink';
-export type CiteStyle = 'plain' | 'at';
+export type RowType = 'shot' | 'visual' | 'camera' | 'speech' | 'sound' | 'text' | 'define' | 'raw' | 'comment';
 
 export interface Asset {
   id: string;
@@ -19,42 +9,50 @@ export interface Asset {
   url: string;
 }
 
-export interface TimeWindow {
-  start: number;
-  end: number;
-}
-
 export interface Row {
   id: string;
   type: RowType;
   enabled: boolean;
-  /** null = applies to the whole clip */
-  when: TimeWindow | null;
   /** field values, keyed by the block spec's field keys */
   f: Record<string, string>;
 }
 
+/** Whole-prompt fields that are not part of the shot timeline. */
+export interface Doc {
+  /** Base modes: style words written right after [Shot 1], e.g. "Live-action, cinematic". */
+  style: string;
+  /** Full-reference mode: one or two sentences written before [Shot 1]. */
+  styleOpening: string;
+  /** Full-reference mode: summary task types, in the order chosen. */
+  tasks: string[];
+  /** Full-reference mode: summary text after the task-type prefix. */
+  summary: string;
+  soundscape: string;
+  /** The user explicitly asked for complete silence: overall_soundscape becomes N/A. */
+  silent: boolean;
+  /** Empty means N/A. */
+  music: string;
+}
+
 export interface State {
   mode: ModeId;
-  provider: Provider;
-  citeStyle: CiteStyle;
   duration: number;
   aspect: string;
-  resolution: '768p' | '2k';
   frames: { first: string; last: string };
   assets: Asset[];
+  doc: Doc;
   rows: Row[];
 }
 
 export type Action =
-  | { t: 'settings'; patch: Partial<Omit<State, 'rows' | 'assets' | 'frames'>> }
+  | { t: 'settings'; patch: Partial<Pick<State, 'mode' | 'duration' | 'aspect'>> }
+  | { t: 'doc'; patch: Partial<Doc> }
   | { t: 'frame'; which: 'first' | 'last'; url: string }
   | { t: 'addAsset'; asset: Asset }
   | { t: 'setAsset'; id: string; url: string }
   | { t: 'delAsset'; id: string }
   | { t: 'addRow'; row: Row }
   | { t: 'field'; id: string; key: string; value: string }
-  | { t: 'when'; id: string; when: TimeWindow | null }
   | { t: 'toggle'; id: string }
   | { t: 'move'; id: string; to: number }
   | { t: 'dup'; id: string; newId: string }
@@ -68,15 +66,19 @@ export interface Issue {
   fix?: { label: string; action: Action };
 }
 
+/** A run of compiled text, optionally traced back to the row that produced it. */
 export interface Part {
-  rowId: string;
+  rowId?: string;
   text: string;
-}
-export interface Group {
-  when: TimeWindow | null;
-  parts: Part[];
 }
 export interface Compiled {
-  groups: Group[];
+  /** One entry per output line; an empty array is a blank line. */
+  lines: Part[][];
   text: string;
+  /** Shot number (1-based) of every active row, for the sheet. */
+  shotOf: Record<string, number>;
+  /** Text of each shot, used by lint and retention analysis. */
+  shots: string[];
+  /** The description body (integrated_multimodal_description / detailed_description). */
+  description: string;
 }

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { compile } from './compile';
 import { EXAMPLES } from './examples';
 import { lint } from './lint';
-import { Inputs, Issues, Output, Settings } from './Panels';
+import { Audio, Inputs, Issues, Output, Settings, Summary } from './Panels';
 import { Sheet } from './Sheet';
 import { MODES } from './spec';
 import { parseState, useStore } from './store';
@@ -37,7 +37,7 @@ export default function App() {
       <header>
         <div className="brand">
           <b>Hailuo Sheet</b>
-          <small>MiniMax H3 prompt events</small>
+          <small>MiniMax H3 prompts, per h3-prompt-writing</small>
         </div>
         <nav className="modes">
           {MODES.map((m) => (
@@ -71,7 +71,9 @@ export default function App() {
         <div className="left">
           <Settings state={state} dispatch={dispatch} />
           <Inputs state={state} dispatch={dispatch} />
-          <Sheet state={state} issues={issues} dispatch={dispatch} onHover={setHoverRow} />
+          <Summary state={state} dispatch={dispatch} />
+          <Sheet state={state} compiled={compiled} issues={issues} dispatch={dispatch} onHover={setHoverRow} />
+          <Audio state={state} dispatch={dispatch} />
         </div>
         <aside className="right">
           <Output state={state} compiled={compiled} hoverRow={hoverRow} />

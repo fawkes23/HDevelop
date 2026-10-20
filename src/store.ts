@@ -1,9 +1,9 @@
 import { useEffect, useReducer } from 'react';
-import { BLOCKS } from './spec';
+import { BLOCKS, MODES, optionsFor } from './spec';
 import { EXAMPLES } from './examples';
 import type { Action, Row, RowType, State } from './types';
 
-const KEY = 'hailuo-sheet:v1';
+const KEY = 'hailuo-sheet:v2';
 
 export const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
@@ -11,13 +11,15 @@ export const uid = () =>
 export function newRow(type: RowType): Row {
   const f: Record<string, string> = {};
   for (const fd of BLOCKS[type].fields) f[fd.key] = fd.default ?? '';
-  return { id: uid(), type, enabled: true, when: null, f };
+  return { id: uid(), type, enabled: true, f };
 }
 
 export function reducer(s: State, a: Action): State {
   switch (a.t) {
     case 'settings':
       return { ...s, ...a.patch };
+    case 'doc':
+      return { ...s, doc: { ...s.doc, ...a.patch } };
     case 'frame':
       return { ...s, frames: { ...s.frames, [a.which]: a.url } };
     case 'addAsset':
@@ -34,9 +36,7 @@ export function reducer(s: State, a: Action): State {
     case 'addRow':
       return { ...s, rows: [...s.rows, a.row] };
     case 'field':
-      return { ...s, rows: s.rows.map((r) => (r.id === a.id ? { ...r, f: { ...r.f, [a.key]: a.value } } : r)) };
-    case 'when':
-      return { ...s, rows: s.rows.map((r) => (r.id === a.id ? { ...r, when: a.when } : r)) };
+      return { ...s, rows: s.rows.map((r) => (r.id === a.id ? { ...r, f: dependents(r, { ...r.f, [a.key]: a.value }, a.key) } : r)) };
     case 'toggle':
       return { ...s, rows: s.rows.map((r) => (r.id === a.id ? { ...r, enabled: !r.enabled } : r)) };
     case 'move': {
@@ -54,7 +54,7 @@ export function reducer(s: State, a: Action): State {
       if (i < 0) return s;
       const src = s.rows[i];
       const rows = s.rows.slice();
-      rows.splice(i + 1, 0, { ...src, id: a.newId, f: { ...src.f }, when: src.when ? { ...src.when } : null });
+      rows.splice(i + 1, 0, { ...src, id: a.newId, f: { ...src.f } });
       return { ...s, rows };
     }
     case 'del':
@@ -64,9 +64,30 @@ export function reducer(s: State, a: Action): State {
   }
 }
 
+/** Reset fields whose options depend on the field that just changed (e.g. marker on label kind). */
+function dependents(row: Row, f: Record<string, string>, changed: string): Record<string, string> {
+  const out = { ...f };
+  for (const fd of BLOCKS[row.type].fields) {
+    if (fd.optionsBy?.key === changed) {
+      const opts = optionsFor(fd, out);
+      if (!opts.some((o) => o.value === out[fd.key])) out[fd.key] = opts[0]?.value ?? '';
+    }
+    if (fd.assetKindBy?.key === changed) out[fd.key] = '';
+  }
+  return out;
+}
+
 function valid(x: unknown): x is State {
   const s = x as State;
-  return !!s && Array.isArray(s.rows) && Array.isArray(s.assets) && !!s.frames && typeof s.mode === 'string';
+  return (
+    !!s &&
+    Array.isArray(s.rows) &&
+    Array.isArray(s.assets) &&
+    !!s.frames &&
+    !!s.doc &&
+    MODES.some((m) => m.id === s.mode) &&
+    s.rows.every((r) => r && typeof r.type === 'string' && r.type in BLOCKS)
+  );
 }
 
 export function parseState(json: string): State | null {
@@ -88,7 +109,7 @@ function initial(): State {
   } catch {
     /* storage unavailable: start from the example */
   }
-  return EXAMPLES.t2v.build();
+  return EXAMPLES.t2va.build();
 }
 
 export function useStore() {

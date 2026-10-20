@@ -1,22 +1,7 @@
-import { assetLabel } from './compile';
 import type { State } from './types';
 
-const MAGNIFIC_ASPECT: Record<string, string> = {
-  adaptive: 'adaptive',
-  '21:9': 'film_horizontal_21_9',
-  '16:9': 'widescreen_16_9',
-  '4:3': 'classic_4_3',
-  '1:1': 'square_1_1',
-  '3:4': 'traditional_3_4',
-  '9:16': 'social_story_9_16',
-};
-
-const EVOLINK_MODEL = {
-  t2v: 'minimax-h3-text-to-video',
-  i2v: 'minimax-h3-image-to-video',
-  flf: 'minimax-h3-image-to-video',
-  ref2v: 'minimax-h3-reference-to-video',
-} as const;
+/** H3 outputs 24 FPS (MiniMax-H3 README). */
+const FPS = 24;
 
 export interface Payload {
   endpoint: string;
@@ -24,42 +9,36 @@ export interface Payload {
   notes: string[];
 }
 
-/** Request body for the chosen provider. Field names differ, the modes do not. */
+/**
+ * Request body for a locally deployed H3-Base, which takes the rewritten prompt
+ * directly. Shape copied from scripts/readme/*-h3-base.sh in MiniMax-AI/MiniMax-H3.
+ * I2VA, FL2VA and L2VA all run on the FL2VA checkpoint.
+ */
 export function buildPayload(state: State, prompt: string): Payload {
   const notes: string[] = [];
-  const urls = (kind: string) => state.assets.filter((a) => a.kind === kind).map((a) => a.url.trim());
-  const body: Record<string, unknown> = { prompt, duration: state.duration };
   const m = state.mode;
+  const conditions: Record<string, unknown>[] = [];
+  const lastIndex = Math.round(state.duration * FPS) - 1;
 
-  if (state.provider === 'magnific') {
-    const endpoint = `POST /v1/ai/video/minimax-h3-${state.resolution}`;
-    if (m === 't2v' || m === 'ref2v') body.aspect_ratio = MAGNIFIC_ASPECT[state.aspect];
-    if (m === 'i2v' || m === 'flf') body.image = state.frames.first.trim();
-    if (m === 'flf') body.image_end = state.frames.last.trim();
-    if (m === 'ref2v') {
-      if (urls('image').length) body.reference_images = urls('image');
-      if (urls('video').length) body.reference_videos = urls('video');
-      if (urls('audio').length) body.reference_audios = urls('audio');
-    }
-    notes.push('Resolution is chosen by the endpoint, not a body field.');
-    if (m === 'i2v' || m === 'flf') notes.push('aspect_ratio omitted: the first frame sets it.');
-    return { endpoint, body, notes };
+  if (m === 'i2va' || m === 'fl2va') {
+    conditions.push({ type: 'image', uri: state.frames.first.trim(), role: 'keyframe', frame_index: 0 });
+  }
+  if (m === 'fl2va' || m === 'l2va') {
+    conditions.push({ type: 'image', uri: state.frames.last.trim(), role: 'keyframe', frame_index: lastIndex });
+    notes.push(`The repository examples only show frame_index 0. The last-frame index here (${lastIndex}) is derived from 24 FPS × duration.`);
+  }
+  if (m === 'ref2va') {
+    for (const a of state.assets) conditions.push({ type: a.kind, uri: a.url.trim(), role: 'reference' });
+    notes.push('Conditions keep asset order, so <Picture N>, <Video N> and <Audio N> map to the Nth file of each type.');
   }
 
-  // evolink
-  const out: Record<string, unknown> = { model: EVOLINK_MODEL[m], prompt, quality: '2k', duration: state.duration };
-  if (m === 't2v' || m === 'ref2v') out.aspect_ratio = state.aspect;
-  if (m === 'i2v' || m === 'flf') out.image_start = state.frames.first.trim();
-  if (m === 'flf') out.image_end = state.frames.last.trim();
-  if (m === 'ref2v') {
-    if (urls('image').length) out.image_urls = urls('image');
-    if (urls('video').length) out.video_urls = urls('video');
-    if (urls('audio').length) out.audio_urls = urls('audio');
-  }
-  if (m === 'i2v' || m === 'flf') notes.push('aspect_ratio omitted: this route returns an error if it is sent in image mode.');
-  notes.push('Media must be public http(s) URLs. Base64 is not accepted on this route.');
-  return { endpoint: 'POST /v1/videos/generations', body: out, notes };
+  const body = {
+    task: m === 't2va' ? 't2va' : m === 'ref2va' ? 'ref2va' : 'fl2va',
+    prompt,
+    conditions,
+    target: { short_edge: 768, aspect_ratio: state.aspect, duration_seconds: state.duration },
+    seed: 0,
+  };
+  notes.push('H3-Base renders 768p. 2K needs the hosted H3-Regenerate-2K step.');
+  return { endpoint: 'POST /v1/videos', body, notes };
 }
-
-/** Handy for the assets panel: "Image 1" etc. */
-export const labelFor = (state: State, id: string) => assetLabel(state.assets, id) ?? '?';

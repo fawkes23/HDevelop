@@ -1,14 +1,15 @@
 import { useMemo, useRef, useState } from 'react';
 import type { Dispatch } from 'react';
 import { assetLabel } from './compile';
-import { BLOCKS, BLOCK_ORDER, type FieldSpec } from './spec';
+import { BLOCKS, BLOCK_ORDER, fieldVisible, optionsFor, type FieldSpec } from './spec';
 import { newRow, uid } from './store';
-import type { Action, Issue, Row, State } from './types';
+import type { Action, Compiled, Issue, Row, State } from './types';
 
 interface RowProps {
   row: Row;
   index: number;
   state: State;
+  shot: number | undefined;
   issues: Issue[];
   dispatch: Dispatch<Action>;
   onHover: (id: string | null) => void;
@@ -18,14 +19,14 @@ interface RowProps {
 }
 
 function Field({ spec, row, state, dispatch }: { spec: FieldSpec; row: Row; state: State; dispatch: Dispatch<Action> }) {
-  if (spec.showIf && row.f[spec.showIf.key] !== spec.showIf.value) return null;
+  if (!fieldVisible(spec, row.f)) return null;
   const value = row.f[spec.key] ?? '';
   const set = (v: string) => dispatch({ t: 'field', id: row.id, key: spec.key, value: v });
   let input;
   if (spec.kind === 'select') {
     input = (
       <select value={value} onChange={(e) => set(e.target.value)}>
-        {spec.options!.map((o) => (
+        {optionsFor(spec, row.f).map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
@@ -36,7 +37,7 @@ function Field({ spec, row, state, dispatch }: { spec: FieldSpec; row: Row; stat
     input = (
       <select value={value} onChange={(e) => set(e.target.value)}>
         <option value="">Choose file…</option>
-        {state.assets.map((a) => (
+        {state.assets.filter((a) => !spec.assetKindBy || a.kind === spec.assetKindBy.map[row.f[spec.assetKindBy.key]]).map((a) => (
           <option key={a.id} value={a.id}>
             {assetLabel(state.assets, a.id)}
           </option>
@@ -47,6 +48,8 @@ function Field({ spec, row, state, dispatch }: { spec: FieldSpec; row: Row; stat
     input = (
       <textarea rows={2} value={value} placeholder={spec.placeholder} onChange={(e) => set(e.target.value)} />
     );
+  } else if (spec.kind === 'number') {
+    input = <input type="number" min={0} step={0.5} value={value} placeholder={spec.placeholder} onChange={(e) => set(e.target.value)} />;
   } else {
     input = <input type="text" value={value} placeholder={spec.placeholder} onChange={(e) => set(e.target.value)} />;
   }
@@ -58,50 +61,14 @@ function Field({ spec, row, state, dispatch }: { spec: FieldSpec; row: Row; stat
   );
 }
 
-function WhenCell({ row, state, dispatch }: { row: Row; state: State; dispatch: Dispatch<Action> }) {
-  const timed = BLOCKS[row.type].timed;
-  if (!timed) return <div className="when muted">whole clip</div>;
-  const w = row.when;
-  return (
-    <div className="when">
-      <select
-        value={w ? 'window' : 'all'}
-        onChange={(e) =>
-          dispatch({
-            t: 'when',
-            id: row.id,
-            when: e.target.value === 'all' ? null : { start: 0, end: Math.min(state.duration, 5) },
-          })
-        }
-      >
-        <option value="all">Whole clip</option>
-        <option value="window">Time window</option>
-      </select>
-      {w && (
-        <div className="window">
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={w.start}
-            onChange={(e) => dispatch({ t: 'when', id: row.id, when: { ...w, start: Number(e.target.value) } })}
-          />
-          <span>→</span>
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={w.end}
-            onChange={(e) => dispatch({ t: 'when', id: row.id, when: { ...w, end: Number(e.target.value) } })}
-          />
-          <span>s</span>
-        </div>
-      )}
-    </div>
-  );
+function ShotCell({ row, shot, state }: { row: Row; shot: number | undefined; state: State }) {
+  if (row.type === 'comment') return <div className="when muted">note</div>;
+  if (row.type === 'define') return <div className="when muted">{state.mode === 'ref2va' ? 'definitions' : 'Ref2VA only'}</div>;
+  if (!shot) return <div className="when muted">off</div>;
+  return <div className={'when' + (row.type === 'shot' ? ' shotStart' : ' muted')}>{row.type === 'shot' ? `[Shot ${shot}]` : `in Shot ${shot}`}</div>;
 }
 
-function RowView({ row, index, state, issues, dispatch, onHover, dragId, setDragId, total }: RowProps) {
+function RowView({ row, index, state, shot, issues, dispatch, onHover, dragId, setDragId, total }: RowProps) {
   const spec = BLOCKS[row.type];
   const worst = issues.some((i) => i.level === 'error') ? 'error' : issues.some((i) => i.level === 'warn') ? 'warn' : issues.length ? 'info' : '';
   const ref = useRef<HTMLDivElement>(null);
@@ -152,7 +119,7 @@ function RowView({ row, index, state, issues, dispatch, onHover, dragId, setDrag
         )}
       </div>
 
-      <WhenCell row={row} state={state} dispatch={dispatch} />
+      <ShotCell row={row} shot={shot} state={state} />
 
       <div className="doCell">
         {spec.fields.map((fd) => (
@@ -241,11 +208,13 @@ function AddMenu({ dispatch }: { dispatch: Dispatch<Action> }) {
 
 export function Sheet({
   state,
+  compiled,
   issues,
   dispatch,
   onHover,
 }: {
   state: State;
+  compiled: Compiled;
   issues: Issue[];
   dispatch: Dispatch<Action>;
   onHover: (id: string | null) => void;
@@ -256,7 +225,7 @@ export function Sheet({
       <div className="sheetHead">
         <span />
         <span>Block</span>
-        <span>When</span>
+        <span>Shot</span>
         <span>Do</span>
         <span />
       </div>
@@ -268,6 +237,7 @@ export function Sheet({
           index={i}
           total={state.rows.length}
           state={state}
+          shot={compiled.shotOf[r.id]}
           issues={issues.filter((x) => x.rowId === r.id)}
           dispatch={dispatch}
           onHover={onHover}
