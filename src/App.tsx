@@ -1,55 +1,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, ChevronDown, ChevronLeft, Clapperboard, Download, FileText, FolderOpen, Menu as MenuIcon, Upload } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BookOpen, Clapperboard, Download, FileText, FolderOpen, Library, Menu as MenuIcon, SlidersHorizontal } from 'lucide-react';
 import type { Run } from './Block';
+import { fieldDomId } from './Block';
 import { compile } from './compile';
 import { EXAMPLES } from './examples';
+import { Inspector } from './Inspector';
 import { lint } from './lint';
 import { Preview, type Located } from './Preview';
-import { Overview, References, Sound } from './Sections';
-import { ShotEditor } from './ShotEditor';
 import { groupIds, shotGroups, suggestStart, type ShotGroup } from './shots';
-import { Sidebar, viewKey, type Counts, type View } from './Sidebar';
-import { BLOCKS } from './spec';
+import { MODES } from './spec';
 import { newRow, parseState, useStore } from './store';
-import type { Action, Issue, State } from './types';
-import { Menu, download, useMedia } from './ui';
+import { CUT_STEP, insertIndex, nextSpeakerId, shotAt, shotSpans, speakerLanes } from './timeline/geometry';
+import { Timeline, type Sel } from './timeline/Timeline';
+import type { Action, Issue, RowType, State } from './types';
+import { Menu, download } from './ui';
+import { Viewer } from './Viewer';
 
 interface Toast {
   message: string;
   undo?: State;
-  tone?: 'error';
 }
 
-const DOC_AREAS: Record<string, { view: View['kind']; where: string }> = {
-  duration: { view: 'overview', where: 'Overview' },
-  aspect: { view: 'overview', where: 'Overview' },
-  style: { view: 'overview', where: 'Overview' },
-  styleOpening: { view: 'overview', where: 'Overview' },
-  'frame.first': { view: 'overview', where: 'Overview' },
-  'frame.last': { view: 'overview', where: 'Overview' },
-  assets: { view: 'refs', where: 'References' },
-  tasks: { view: 'refs', where: 'References' },
-  summary: { view: 'refs', where: 'References' },
-  soundscape: { view: 'sound', where: 'Sound and music' },
-  music: { view: 'sound', where: 'Sound and music' },
-};
+const FORMAT_FIELDS = new Set(['duration', 'aspect', 'style', 'styleOpening', 'frame.first', 'frame.last']);
+const REF_FIELDS = new Set(['assets', 'tasks', 'summary']);
 
-/** Scroll to and focus an element once the next view has rendered. */
-function reveal(...ids: string[]) {
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      const el = ids.map((id) => document.getElementById(id)).find(Boolean);
-      if (!el) return;
-      el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-      const target = el.matches('input, textarea, select, button') ? el : el.querySelector<HTMLElement>('input, textarea, select');
-      target?.focus({ preventScroll: true });
-      const block = el.closest('.block');
-      if (block) {
-        block.classList.add('is-flash');
-        setTimeout(() => block.classList.remove('is-flash'), 1000);
-      }
-    }),
-  );
+/** First field to type into when a new clip is added. */
+const FIRST_FIELD: Partial<Record<RowType, string>> = { camera: 'detail', speech: 'who', text: 'text', define: 'def' };
+
+/** Scroll to and focus the first of these elements that exists. */
+function focusFirst(ids: string[]): boolean {
+  const el = ids.map((id) => document.getElementById(id)).find(Boolean);
+  if (!el) return false;
+  el.scrollIntoView({ block: 'nearest' });
+  const target = el.matches('input, textarea, select, button') ? el : el.querySelector<HTMLElement>('input, textarea, select');
+  target?.focus({ preventScroll: true });
+  return true;
 }
 
 export default function App() {
@@ -57,25 +42,75 @@ export default function App() {
   const compiled = useMemo(() => compile(state), [state]);
   const issues = useMemo(() => lint(state, compiled), [state, compiled]);
   const groups = useMemo(() => shotGroups(state, compiled), [state, compiled]);
+  const spans = useMemo(() => shotSpans(groups, state.duration), [groups, state.duration]);
+  const lanes = useMemo(() => speakerLanes(state), [state]);
 
-  const wide = useMedia('(min-width: 1240px)');
-  const narrow = useMedia('(max-width: 759px)');
-
-  const [view, setView] = useState<View>({ kind: 'overview' });
-  const [showNav, setShowNav] = useState(true);
-  const [docked, setDocked] = useState(true);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sel, setSelRaw] = useState<Sel>(() => (groups[0] ? { kind: 'shot', key: groups[0].key } : { kind: 'format' }));
+  const [time, setTime] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [drawer, setDrawer] = useState(false);
   const [tab, setTab] = useState<'prompt' | 'checks' | 'request'>('prompt');
-  const [activeRow, setActiveRow] = useState<string | null>(null);
-  const [focusRowId, setFocusRowId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [focusRowId, setFocusRowId] = useState<string | null>(null);
+  const [activeRow, setActiveRow] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const promptBtn = useRef<HTMLButtonElement>(null);
+  // Elements to focus after the next render (a new clip's first field, a check's target).
+  const [pendingFocus, setPendingFocus] = useState<string[] | null>(null);
+  const reveal = useCallback((...ids: string[]) => setPendingFocus(ids), []);
+  useEffect(() => {
+    if (pendingFocus && focusFirst(pendingFocus)) setPendingFocus(null);
+  });
+  const mode = MODES.find((m) => m.id === state.mode)!;
 
-  // Fall back gracefully when the selected shot or section disappears.
-  const shotIndex = view.kind === 'shot' ? groups.findIndex((g) => g.key === view.key) : -1;
-  const current: View =
-    (view.kind === 'shot' && shotIndex < 0) || (view.kind === 'refs' && state.mode !== 'ref2va') ? { kind: 'overview' } : view;
+  const setSel = useCallback((s: Sel, t?: number) => {
+    setSelRaw(s);
+    if (t !== undefined) setTime(t);
+  }, []);
+
+  // The shot the editor is "in": the selected shot, the selected clip's shot, or the one under the playhead.
+  const selGroup = useMemo(() => {
+    if (sel?.kind === 'shot') return groups.findIndex((g) => g.key === sel.key);
+    if (sel?.kind === 'row') {
+      const i = groups.findIndex((g) => g.head?.id === sel.id || g.rows.some((r) => r.id === sel.id));
+      if (i >= 0) return i;
+    }
+    return groups.length ? shotAt(spans, Math.min(time, state.duration - 0.001)) : -1;
+  }, [sel, groups, spans, time, state.duration]);
+
+  /* ---------- play ---------- */
+  useEffect(() => {
+    if (!playing) return;
+    let last = performance.now();
+    let raf = 0;
+    setTime((t) => (t >= state.duration - 0.05 ? 0 : t));
+    const tick = (now: number) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      setTime((t) => {
+        const next = t + dt;
+        if (next >= state.duration) {
+          setPlaying(false);
+          return state.duration;
+        }
+        return next;
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, state.duration]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== ' ' || e.repeat) return;
+      const t = e.target as HTMLElement;
+      if (t.closest('input, textarea, select, button, [contenteditable], [role="slider"], [role="radio"]')) return;
+      e.preventDefault();
+      setPlaying((p) => !p);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -91,182 +126,128 @@ export default function App() {
     [state, dispatch],
   );
 
-  const navigate = useCallback(
-    (v: View) => {
-      setView(v);
-      if (narrow) setShowNav(false);
-      window.scrollTo({ top: 0 });
-    },
-    [narrow],
-  );
+  /* ---------- editing actions ---------- */
+  const addClip = (type: RowType, gi: number, lane?: string) => {
+    const g = groups[gi];
+    if (!g) return;
+    const row = newRow(type);
+    if (type === 'speech') {
+      const l = lanes.find((x) => x.id === lane) ?? lanes[0];
+      row.f.id = l?.id ?? 'S1';
+      row.f.who = l?.who ?? '';
+    }
+    dispatch({ t: 'insertRow', row, index: insertIndex(state.rows, g, spans[gi], spans[gi].end + 1) });
+    setSel({ kind: 'row', id: row.id });
+    const key = type === 'speech' && row.f.who ? 'line' : (FIRST_FIELD[type] ?? 'text');
+    reveal(fieldDomId(row.id, key));
+  };
+
+  const addSpeaker = () => {
+    const gi = selGroup >= 0 ? selGroup : 0;
+    const g = groups[gi];
+    if (!g) return;
+    const row = newRow('speech');
+    row.f.id = nextSpeakerId(lanes);
+    dispatch({ t: 'insertRow', row, index: insertIndex(state.rows, g, spans[gi], spans[gi].end + 1) });
+    setSel({ kind: 'row', id: row.id });
+    reveal(fieldDomId(row.id, 'who'));
+  };
 
   const addShot = () => {
     const row = newRow('shot');
-    row.f.at = suggestStart(state, compiled);
+    if (groups.length) {
+      const at = suggestStart(state, compiled);
+      if (!at) return setToast({ message: 'There is no room for another shot. Make the video longer by dragging the end of the timeline.' });
+      row.f.at = at;
+    }
     dispatch({ t: 'addRow', row });
-    navigate({ kind: 'shot', key: row.id });
-    setFocusRowId(row.id);
+    setSel({ kind: 'shot', key: row.id }, Number(row.f.at || 0));
+    reveal(fieldDomId(row.id, 'text'));
+  };
+
+  const split = () => {
+    if (!groups.length) return addShot();
+    const t = Math.round(time / CUT_STEP) * CUT_STEP;
+    const gi = shotAt(spans, Math.min(time, state.duration - 0.001));
+    const s = spans[gi];
+    if (t < s.start + CUT_STEP || t > s.end - CUT_STEP) {
+      return setToast({ message: 'Move the playhead inside a shot, at least half a second from its edges, to split it.' });
+    }
+    const row = newRow('shot');
+    row.f.at = String(t);
+    dispatch({ t: 'insertRow', row, index: insertIndex(state.rows, groups[gi], s, s.end + 1) });
+    setSel({ kind: 'shot', key: row.id }, t);
+    reveal(fieldDomId(row.id, 'text'));
   };
 
   const deleteShot = (g: ShotGroup) => {
     const i = groups.indexOf(g);
     const neighbour = groups[i + 1] ?? groups[i - 1];
     run({ t: 'delRows', ids: groupIds(g) }, `${g.number ? `Shot ${g.number}` : 'Shot'} deleted`);
-    setView(neighbour ? { kind: 'shot', key: neighbour.key } : { kind: 'overview' });
+    setSel(neighbour ? { kind: 'shot', key: neighbour.key } : { kind: 'format' });
   };
 
-  const openReview = () => {
-    setTab('prompt');
-    if (wide) {
-      setDocked(true);
-      reveal('preview-panel');
-    } else setDrawerOpen(true);
-  };
-
-  /** Where an issue lives, as a section to open and an element to focus. */
+  /* ---------- issues → places ---------- */
   const locate = useCallback(
-    (i: Issue): (Located & { view: View }) | null => {
-      const go = (v: View, ...anchors: string[]) => () => {
-        navigate(v);
-        if (!wide) setDrawerOpen(false);
+    (i: Issue): Located | null => {
+      const go = (s: Sel, ...anchors: string[]) => () => {
+        setSel(s);
+        setDrawer(false);
         reveal(...anchors);
       };
       if (i.rowId) {
         const row = state.rows.find((r) => r.id === i.rowId);
         if (!row) return null;
-        const anchor = i.field ? `f-${row.id}-${i.field}` : 'row-' + row.id;
-        if (row.type === 'define') {
-          if (state.mode !== 'ref2va') return null;
-          const v: View = { kind: 'refs' };
-          return { view: v, where: 'References', go: go(v, anchor, 'row-' + row.id) };
-        }
+        const anchor = i.field ? fieldDomId(row.id, i.field) : 'row-' + row.id;
+        if (row.type === 'define') return state.mode === 'ref2va' ? { where: 'References', go: go({ kind: 'refs' }, anchor, 'row-' + row.id) } : null;
         const g = groups.find((x) => x.head?.id === row.id || x.rows.includes(row));
         if (!g) return null;
-        const v: View = { kind: 'shot', key: g.key };
-        const label = g.number ? `Shot ${g.number}` : 'shot';
-        const where = row.type === 'shot' ? label : `${label} · ${BLOCKS[row.type].label}`;
-        return { view: v, where, go: go(v, anchor, 'row-' + row.id) };
+        if (row.type === 'shot') return { where: `Shot ${g.number ?? ''}`.trim(), go: go({ kind: 'shot', key: g.key }, anchor) };
+        return { where: `Shot ${g.number ?? '–'} · clip`, go: go({ kind: 'row', id: row.id }, anchor, 'row-' + row.id) };
       }
-      const area = i.field && (DOC_AREAS[i.field] ?? (i.field.startsWith('asset:') ? { view: 'refs', where: 'References' } : null));
-      if (!area || (area.view === 'refs' && state.mode !== 'ref2va')) return null;
-      const v = { kind: area.view } as View;
-      const anchor = i.field!.startsWith('asset:') ? 'asset-' + i.field!.slice(6) : 'doc-' + i.field;
-      return { view: v, where: area.where, go: go(v, anchor) };
+      const f = i.field ?? '';
+      if (FORMAT_FIELDS.has(f)) return { where: 'Format', go: go({ kind: 'format' }, 'doc-' + f) };
+      if (f === 'soundscape' || f === 'music') return { where: f === 'music' ? 'Music' : 'Background sound', go: go({ kind: f }, 'doc-' + f) };
+      if (state.mode === 'ref2va' && (REF_FIELDS.has(f) || f.startsWith('asset:'))) {
+        return { where: 'References', go: go({ kind: 'refs' }, f.startsWith('asset:') ? 'asset-' + f.slice(6) : 'doc-' + f) };
+      }
+      return null;
     },
-    [state, groups, navigate, wide],
+    [state, groups, setSel, reveal],
   );
-
-  const counts = useMemo(() => {
-    const c: Counts = {};
-    for (const i of issues) {
-      if (i.level === 'info') continue;
-      const loc = locate(i);
-      if (!loc) continue;
-      const k = viewKey(loc.view);
-      c[k] ??= { error: 0, warn: 0 };
-      c[k][i.level]++;
-    }
-    return c;
-  }, [issues, locate]);
-
-  const openRow = (id: string) => {
-    const loc = locate({ level: 'info', message: '', rowId: id });
-    loc?.go();
-  };
 
   const loadState = (s: State, message: string) => {
     setToast({ message, undo: state });
     dispatch({ t: 'load', state: s });
-    setView({ kind: 'overview' });
-    if (narrow) setShowNav(true);
+    setSel({ kind: 'format' }, 0);
+    setPlaying(false);
   };
-
   const importJson = async (file?: File) => {
     if (!file) return;
     const s = parseState(await file.text());
     if (s) loadState(s, `Opened ${file.name}`);
-    else setToast({ message: 'That file isn’t a Hailuo Sheet project.', tone: 'error' });
+    else setToast({ message: 'That file isn’t a Hailuo Sheet project.' });
     if (fileRef.current) fileRef.current.value = '';
   };
   const exportJson = () => download('hailuo-sheet.json', JSON.stringify(state, null, 2), 'application/json');
 
-  // Drawer: Escape closes, focus returns to the button that opened it.
   useEffect(() => {
-    if (!drawerOpen) return;
-    const prev = document.activeElement as HTMLElement | null;
-    document.querySelector<HTMLElement>('.drawer .btn')?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setDrawerOpen(false);
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setDrawer(false);
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      (prev ?? promptBtn.current)?.focus();
-    };
-  }, [drawerOpen]);
-  useEffect(() => {
-    if (wide) setDrawerOpen(false);
-  }, [wide]);
+    document.querySelector<HTMLElement>('.drawer .btn')?.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawer]);
 
-  const problems = issues.filter((i) => i.level !== 'info').length;
-  const errors = issues.filter((i) => i.level === 'error').length;
-  const shotIds = new Set(current.kind === 'shot' && shotIndex >= 0 ? groupIds(groups[shotIndex]) : []);
-
-  const exampleItems = Object.values(EXAMPLES).map((v) => ({ label: v.label, onSelect: () => loadState(v.build(), 'Example loaded') }));
-  const backButton = narrow ? (
-    <button type="button" className="btn btn-ghost btn-sm back-btn" onClick={() => setShowNav(true)}>
-      <ChevronLeft size={16} /> All sections
-    </button>
-  ) : null;
-
-  const preview = (onClose?: () => void) => (
-    <Preview
-      state={state}
-      compiled={compiled}
-      issues={issues}
-      dispatch={dispatch}
-      locate={locate}
-      shotIds={shotIds}
-      activeRow={activeRow}
-      onOpenRow={openRow}
-      onClose={onClose}
-      tab={tab}
-      setTab={setTab}
-    />
-  );
-
-  const common = { state, issues, dispatch, backButton };
-  let editor: React.ReactNode;
-  if (current.kind === 'shot') {
-    editor = (
-      <ShotEditor
-        groups={groups}
-        index={shotIndex}
-        state={state}
-        issues={issues}
-        dispatch={dispatch}
-        run={run}
-        focusRowId={focusRowId}
-        setFocusRowId={setFocusRowId}
-        setActiveRow={setActiveRow}
-        onSelect={(key) => navigate({ kind: 'shot', key })}
-        onAddShot={addShot}
-        onDeleteShot={deleteShot}
-        onOverview={() => {
-          navigate({ kind: 'overview' });
-          reveal('doc-style');
-        }}
-        onReview={openReview}
-        backButton={backButton}
-      />
-    );
-  } else if (current.kind === 'refs') {
-    editor = <References {...common} run={run} focusRowId={focusRowId} setFocusRowId={setFocusRowId} setActiveRow={setActiveRow} />;
-  } else if (current.kind === 'sound') {
-    editor = <Sound {...common} onReview={openReview} />;
-  } else {
-    editor = <Overview {...common} groups={groups} onOpenShot={(key) => navigate({ kind: 'shot', key })} onAddShot={addShot} />;
-  }
-
-  const promptLabel = wide ? (docked ? 'Hide prompt' : 'Show prompt') : 'Prompt';
+  const problems = issues.filter((i) => i.level !== 'info');
+  const errors = problems.filter((i) => i.level === 'error').length;
+  const formatIssues = issues.filter((i) => i.level !== 'info' && !i.rowId && FORMAT_FIELDS.has(i.field ?? '')).length;
+  const shotIds = new Set(selGroup >= 0 && groups[selGroup] ? groupIds(groups[selGroup]) : []);
+  const style = state.mode === 'ref2va' ? '' : state.doc.style.trim();
+  const openDrawer = (t: typeof tab) => {
+    setTab(t);
+    setDrawer(true);
+  };
 
   return (
     <>
@@ -275,78 +256,106 @@ export default function App() {
           <span className="brand-mark" aria-hidden="true">
             <Clapperboard size={16} />
           </span>
-          Hailuo Sheet
+          <span className="hide-narrow">Hailuo Sheet</span>
         </div>
+        <button type="button" className={'format-chip' + (sel?.kind === 'format' ? ' is-selected' : '')} aria-pressed={sel?.kind === 'format'} onClick={() => setSel({ kind: 'format' })}>
+          <SlidersHorizontal size={16} aria-hidden="true" />
+          <span className="format-main">{mode.title}</span>
+          <span className="format-meta">
+            {state.aspect} · {state.duration} s{style && ` · ${style}`}
+          </span>
+          {formatIssues > 0 && <AlertTriangle size={14} className="format-warn" aria-label={`${formatIssues} to check`} />}
+        </button>
+        {state.mode === 'ref2va' && (
+          <button type="button" className={'btn btn-ghost' + (sel?.kind === 'refs' ? ' is-on' : '')} aria-pressed={sel?.kind === 'refs'} onClick={() => setSel({ kind: 'refs' })}>
+            <Library size={16} /> References <span className="count">{state.assets.length}</span>
+          </button>
+        )}
         <div className="topbar-spacer" />
         <div className="topbar-actions">
-          {!narrow ? (
-            <>
-              <Menu
-                items={exampleItems}
-                trigger={(p) => (
-                  <button type="button" className="btn btn-ghost" {...p}>
-                    <BookOpen size={16} /> Examples <ChevronDown size={16} />
-                  </button>
-                )}
-              />
-              <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
-                <Upload size={16} /> Import
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={exportJson}>
-                <Download size={16} /> Export
-              </button>
-            </>
-          ) : (
-            <Menu
-              items={[
-                ...exampleItems.map((e) => ({ ...e, label: 'Example: ' + e.label })),
-                { label: 'Import project…', icon: FolderOpen, separatorBefore: true, onSelect: () => fileRef.current?.click() },
-                { label: 'Export project', icon: Download, onSelect: exportJson },
-              ]}
-              trigger={(p) => (
-                <button type="button" className="btn btn-ghost" {...p}>
-                  <MenuIcon size={16} /> Project
-                </button>
-              )}
-            />
-          )}
-          <button
-            ref={promptBtn}
-            type="button"
-            className={'btn ' + (wide ? 'btn-secondary' : 'btn-primary')}
-            aria-pressed={wide ? docked : undefined}
-            onClick={() => (wide ? setDocked(!docked) : setDrawerOpen(true))}
-          >
-            <FileText size={16} /> {promptLabel}
-            {problems > 0 && (
-              <span className={'count' + (errors ? ' error' : '')} aria-label={`${problems} checks`}>
-                {problems}
-              </span>
-            )}
+          <button type="button" className="btn btn-ghost" onClick={() => openDrawer('checks')}>
+            {errors ? <AlertCircle size={16} className="text-error" /> : <AlertTriangle size={16} />}
+            <span className="hide-narrow">Problems</span>
+            <span className={'count' + (errors ? ' error' : '')}>{problems.length}</span>
           </button>
+          <button type="button" className="btn btn-primary" onClick={() => openDrawer('prompt')}>
+            <FileText size={16} /> Prompt
+          </button>
+          <Menu
+            items={[
+              ...Object.values(EXAMPLES).map((v) => ({ label: v.label, icon: BookOpen, onSelect: () => loadState(v.build(), 'Example loaded') })),
+              { label: 'Import project…', icon: FolderOpen, separatorBefore: true, onSelect: () => fileRef.current?.click() },
+              { label: 'Export project', icon: Download, onSelect: exportJson },
+            ]}
+            trigger={(t) => (
+              <button type="button" className="btn btn-ghost" aria-label="Project menu" {...t}>
+                <MenuIcon size={16} /> <span className="hide-narrow">Project</span>
+              </button>
+            )}
+          />
           <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => importJson(e.target.files?.[0])} />
         </div>
       </header>
 
-      <div className={'layout' + (wide && docked ? ' with-preview' : '')}>
-        {(!narrow || showNav) && (
-          <aside className="sidebar">
-            <Sidebar state={state} groups={groups} view={narrow ? null : current} counts={counts} onNavigate={navigate} onAddShot={addShot} />
-          </aside>
-        )}
-        {(!narrow || !showNav) && <main className="editor">{editor}</main>}
-        {wide && docked && (
-          <aside className="preview-pane" aria-labelledby="preview-title">
-            {preview()}
-          </aside>
-        )}
-      </div>
+      <main className="studio">
+        <div className="studio-top">
+          <Viewer state={state} groups={groups} spans={spans} time={time} playing={playing} dispatch={dispatch} onSelectShot={(key) => setSel({ kind: 'shot', key })} />
+          <Inspector
+            sel={sel}
+            state={state}
+            issues={issues}
+            groups={groups}
+            spans={spans}
+            dispatch={dispatch}
+            run={run}
+            setSel={setSel}
+            onAddClip={addClip}
+            onDeleteShot={deleteShot}
+            focusRowId={focusRowId}
+            setFocusRowId={setFocusRowId}
+            setActiveRow={setActiveRow}
+          />
+        </div>
+        <Timeline
+          state={state}
+          groups={groups}
+          spans={spans}
+          lanes={lanes}
+          issues={issues}
+          sel={sel}
+          selGroup={selGroup}
+          setSel={setSel}
+          time={time}
+          setTime={setTime}
+          playing={playing}
+          setPlaying={setPlaying}
+          dispatch={dispatch}
+          run={run}
+          onAddShot={addShot}
+          onSplit={split}
+          onAddClip={addClip}
+          onAddSpeaker={addSpeaker}
+          onEdit={() => reveal(...(sel?.kind === 'row' ? [`row-${sel.id}`] : []), 'insp-first')}
+        />
+      </main>
 
-      {!wide && drawerOpen && (
+      {drawer && (
         <>
-          <div className="scrim" onClick={() => setDrawerOpen(false)} />
+          <div className="scrim" onClick={() => setDrawer(false)} />
           <div className="drawer" role="dialog" aria-modal="true" aria-labelledby="preview-title">
-            {preview(() => setDrawerOpen(false))}
+            <Preview
+              state={state}
+              compiled={compiled}
+              issues={issues}
+              dispatch={dispatch}
+              locate={locate}
+              shotIds={shotIds}
+              activeRow={sel?.kind === 'row' ? sel.id : activeRow}
+              onOpenRow={(id) => locate({ level: 'info', message: '', rowId: id })?.go()}
+              onClose={() => setDrawer(false)}
+              tab={tab}
+              setTab={setTab}
+            />
           </div>
         </>
       )}
@@ -366,7 +375,7 @@ export default function App() {
               Undo
             </button>
           )}
-          <button type="button" className="btn btn-sm" aria-label="Dismiss" onClick={() => setToast(null)}>
+          <button type="button" className="btn btn-sm" onClick={() => setToast(null)}>
             OK
           </button>
         </div>

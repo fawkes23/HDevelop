@@ -46,14 +46,22 @@ Ref2VA outputs `subject_definitions`, `summary`, `retention_analysis`, `detailed
 
 ## Using it
 
-1. **Overview**: pick what you are starting from (text, a first image, two images, a last image, or reference files),
-   the length, the frame shape and the look.
-2. **References** (reference mode only): add files, label the people, objects and places in them, and write the summary.
-3. **Shots**: select a shot in the sidebar or add one. Describe what the camera sees, then add blocks in the order
-   things happen.
-4. **Sound and music**: background sound and audience-only music for the whole video.
-5. **Prompt**: the panel on the right (or the Prompt button on smaller screens) shows the compiled prompt, the checks
-   and the H3-Base request. Copy it or download it as text. Export/Import saves the whole project as JSON.
+The editor works like a video editor: a **viewer** (top left), an **inspector** for whatever is selected (top right)
+and a **timeline** (bottom).
+
+- **Shots** are clips on the Shots track. Drag the line between two shots to move the cut (snaps to 0.5 s and can
+  never cross a neighbour), drag the end of the ruler to change the length (4–15 s), or use Split at playhead.
+- **Inside a shot**, items sit on their own tracks (Camera, Action, one lane per speaker, Sound, On-screen text) and
+  read left to right in the order the prompt will. Drag a clip to reorder it or move it to another shot. Drag a
+  dialogue line to another speaker's lane to change who says it. With a selected shot, empty tracks show an Add
+  button.
+- **Background** and **Music** run under the whole video.
+- **Viewer**: type what the camera sees straight onto the frame. Play steps through the video in real time,
+  with subtitles and a hint of the camera move.
+- **Format** (top bar): starting point, length, frame shape and look. **Prompt** opens the compiled prompt,
+  the checks and the H3-Base request. **Project** holds examples, import and export.
+- **Keyboard**: Tab to a clip, arrows to move between clips, Alt+arrows to reorder, Enter to edit, Delete to remove
+  (with undo). The cut and length handles are sliders (arrow keys). Space plays and pauses.
 
 | Block | Compiles to |
 | --- | --- |
