@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type Dispatch } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Circle, Eye, Maximize2, Minimize2, RotateCcw, RotateCw, Vibrate, Video } from 'lucide-react';
+import { ClipboardPaste, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Circle, Eye, Maximize2, Minimize2, RotateCcw, RotateCw, Vibrate, Video } from 'lucide-react';
 import { MODES } from './spec';
 import type { ShotGroup } from './shots';
 import { beatSlots, shotAt, type Span } from './timeline/geometry';
@@ -62,6 +62,7 @@ export function Viewer({
   playing,
   dispatch,
   onSelectShot,
+  onPaste,
 }: {
   state: State;
   groups: ShotGroup[];
@@ -70,6 +71,8 @@ export function Viewer({
   playing: boolean;
   dispatch: Dispatch<Action>;
   onSelectShot: (key: string) => void;
+  /** Offered while the project is still blank. */
+  onPaste?: () => void;
 }) {
   const mode = MODES.find((m) => m.id === state.mode)!;
   const [stageRef, size] = useFrameSize(RATIO[state.aspect] ?? 16 / 9);
@@ -141,6 +144,15 @@ export function Viewer({
               <p className="frame-text is-placeholder">This shot has no camera view yet.</p>
             )}
             {beat && <p className="frame-beat">{clipText(beat)}</p>}
+            {onPaste && (
+              <p className="frame-paste">
+                Already have a prompt?{' '}
+                <button type="button" className="frame-chip" onClick={onPaste}>
+                  <ClipboardPaste size={14} aria-hidden="true" /> Paste an H3 prompt
+                </button>{' '}
+                <span className="muted-on-dark">or press Ctrl/⌘ + V</span>
+              </p>
+            )}
           </div>
 
           {signs.length > 0 && (

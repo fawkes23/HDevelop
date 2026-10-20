@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { BLOCKS, MODES, optionsFor } from './spec';
 import { EXAMPLES } from './examples';
 import type { Action, Row, RowType, State } from './types';
@@ -130,21 +130,25 @@ export function parseState(json: string): State | null {
   }
 }
 
-function initial(): State {
+/** Where the project shown on start came from. */
+export type Source = 'saved' | 'example';
+
+function initial(): { state: State; source: Source } {
   try {
     const saved = localStorage.getItem(KEY);
     if (saved) {
       const s = parseState(saved);
-      if (s) return s;
+      if (s) return { state: s, source: 'saved' };
     }
   } catch {
     /* storage unavailable: start from the example */
   }
-  return EXAMPLES.t2va.build();
+  return { state: EXAMPLES.t2va.build(), source: 'example' };
 }
 
 export function useStore() {
-  const [state, dispatch] = useReducer(reducer, undefined, initial);
+  const [first] = useState(initial);
+  const [state, dispatch] = useReducer(reducer, first.state);
   useEffect(() => {
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
@@ -152,5 +156,5 @@ export function useStore() {
       /* ignore */
     }
   }, [state]);
-  return [state, dispatch] as const;
+  return [state, dispatch, first.source] as const;
 }

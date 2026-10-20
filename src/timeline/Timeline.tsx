@@ -41,12 +41,16 @@ interface Props {
   onEdit: () => void;
 }
 
-/** "The middle-aged baker with a calm voice" -> "middle-aged baker". */
-export const shortName = (who: string) =>
-  who
-    .replace(/^(the|a|an)\s+/i, '')
-    .split(/\s+(?:with|who|in|wearing)\s+|,/i)[0]
-    .trim() || 'Speaker';
+/**
+ * A short lane name from the first description of a speaker:
+ * "The middle-aged baker with a calm voice" -> "middle-aged baker",
+ * "… while the quiet, breathy young woman" -> "breathy young woman".
+ */
+export const shortName = (who: string) => {
+  const phrase = who.split(/\s+(?:with|who|wearing|in)\s+/i)[0];
+  const last = phrase.split(/,\s*|\s+while\s+/).pop() ?? '';
+  return last.replace(/^(the|a|an)\s+/i, '').trim() || 'Speaker';
+};
 
 const fmt = (t: number) => {
   const m = Math.floor(t / 60);

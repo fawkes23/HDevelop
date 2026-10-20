@@ -1,11 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, BookOpen, Clapperboard, Download, FileText, FolderOpen, Library, Menu as MenuIcon, SlidersHorizontal } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  BookOpen,
+  Clapperboard,
+  ClipboardPaste,
+  Download,
+  File,
+  FilePlus,
+  FileText,
+  FolderOpen,
+  Library,
+  Menu as MenuIcon,
+  SlidersHorizontal,
+} from 'lucide-react';
 import type { Run } from './Block';
 import { fieldDomId } from './Block';
 import { compile } from './compile';
 import { EXAMPLES } from './examples';
 import { Inspector } from './Inspector';
 import { lint } from './lint';
+import { blankProject, parsePrompt } from './parse';
+import { PasteDialog, describe } from './PasteDialog';
 import { Preview, type Located } from './Preview';
 import { groupIds, shotGroups, suggestStart, type ShotGroup } from './shots';
 import { MODES } from './spec';
@@ -19,7 +35,17 @@ import { Viewer } from './Viewer';
 interface Toast {
   message: string;
   undo?: State;
+  action?: { label: string; run: () => void };
 }
+
+/** Nothing written yet: one empty shot and no sound, look or files. */
+const isBlank = (s: State) =>
+  s.rows.every((r) => r.type === 'shot' && !(r.f.text ?? '').trim()) &&
+  !s.assets.length &&
+  !s.doc.soundscape.trim() &&
+  !s.doc.music.trim() &&
+  !s.doc.style.trim() &&
+  !s.doc.styleOpening.trim();
 
 const FORMAT_FIELDS = new Set(['duration', 'aspect', 'style', 'styleOpening', 'frame.first', 'frame.last']);
 const REF_FIELDS = new Set(['assets', 'tasks', 'summary']);
@@ -38,7 +64,7 @@ function focusFirst(ids: string[]): boolean {
 }
 
 export default function App() {
-  const [state, dispatch] = useStore();
+  const [state, dispatch, source] = useStore();
   const compiled = useMemo(() => compile(state), [state]);
   const issues = useMemo(() => lint(state, compiled), [state, compiled]);
   const groups = useMemo(() => shotGroups(state, compiled), [state, compiled]);
@@ -216,12 +242,45 @@ export default function App() {
     [state, groups, setSel, reveal],
   );
 
+  const [paste, setPaste] = useState<string | null>(null);
   const loadState = (s: State, message: string) => {
     setToast({ message, undo: state });
     dispatch({ t: 'load', state: s });
-    setSel({ kind: 'format' }, 0);
+    const first = s.rows.find((r) => r.type === 'shot');
+    setSel(first ? { kind: 'shot', key: first.id } : { kind: 'format' }, 0);
     setPlaying(false);
+    setPaste(null);
   };
+  const newBlank = () => {
+    const s = blankProject();
+    loadState(s, 'New blank project');
+    reveal(fieldDomId(s.rows[0].id, 'text'));
+  };
+
+  // Say where the project on screen came from, so it never seems to appear from nowhere.
+  useEffect(() => {
+    setToast({
+      message: source === 'saved' ? 'Restored your last project from this browser.' : 'This is an example project.',
+      action: { label: 'Start new', run: newBlank },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pasting outside a text field: load straight into a blank project, otherwise ask first.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest?.('input, textarea, select, [contenteditable]')) return;
+      const text = e.clipboardData?.getData('text') ?? '';
+      if (!text.trim()) return;
+      e.preventDefault();
+      const r = parsePrompt(text);
+      if (isBlank(state) && !('error' in r)) loadState(r.state, `Loaded: ${describe(r.summary)}`);
+      else setPaste(text);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  });
   const importJson = async (file?: File) => {
     if (!file) return;
     const s = parseState(await file.text());
@@ -273,6 +332,17 @@ export default function App() {
         )}
         <div className="topbar-spacer" />
         <div className="topbar-actions">
+          <Menu
+            items={[
+              { label: 'Blank project', hint: 'Start from one empty shot', icon: File, onSelect: newBlank },
+              { label: 'From an H3 prompt…', hint: 'Paste a prompt and it becomes a timeline', icon: ClipboardPaste, onSelect: () => setPaste('') },
+            ]}
+            trigger={(t) => (
+              <button type="button" className="btn btn-secondary" {...t}>
+                <FilePlus size={16} /> New
+              </button>
+            )}
+          />
           <button type="button" className="btn btn-ghost" onClick={() => openDrawer('checks')}>
             {errors ? <AlertCircle size={16} className="text-error" /> : <AlertTriangle size={16} />}
             <span className="hide-narrow">Problems</span>
@@ -299,7 +369,16 @@ export default function App() {
 
       <main className="studio">
         <div className="studio-top">
-          <Viewer state={state} groups={groups} spans={spans} time={time} playing={playing} dispatch={dispatch} onSelectShot={(key) => setSel({ kind: 'shot', key })} />
+          <Viewer
+            state={state}
+            groups={groups}
+            spans={spans}
+            time={time}
+            playing={playing}
+            dispatch={dispatch}
+            onSelectShot={(key) => setSel({ kind: 'shot', key })}
+            onPaste={isBlank(state) ? () => setPaste('') : undefined}
+          />
           <Inspector
             sel={sel}
             state={state}
@@ -360,9 +439,23 @@ export default function App() {
         </>
       )}
 
+      {paste !== null && <PasteDialog initial={paste} onLoad={loadState} onClose={() => setPaste(null)} />}
+
       {toast && (
         <div className="toast" role="status">
           <span>{toast.message}</span>
+          {toast.action && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setToast(null);
+                toast.action!.run();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
           {toast.undo && (
             <button
               type="button"

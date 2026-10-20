@@ -4,6 +4,7 @@ import { EXAMPLES } from '../examples';
 import { shotGroups } from '../shots';
 import { newRow, reducer } from '../store';
 import type { State } from '../types';
+import { shortName } from './Timeline';
 import { beatSlots, clampCut, clampDuration, dropIndex, nextSpeakerId, reorderTarget, shotSpans, speakerLanes } from './geometry';
 
 const setup = (s: State) => {
@@ -90,5 +91,12 @@ describe('timeline geometry', () => {
     const t = EXAMPLES.t2va.build();
     t.rows.push({ ...newRow('speech'), f: { ...newRow('speech').f, id: 'S1,S2', who: 'They' } });
     expect(speakerLanes(t).map((l) => l.id)).toEqual(['S1', 'S2']);
+  });
+
+  it('lane names keep the noun phrase', () => {
+    expect(shortName('The middle-aged baker with a calm, slightly raspy voice')).toBe('middle-aged baker');
+    expect(shortName('Her reflection moves across the glass while the quiet, breathy young woman')).toBe('breathy young woman');
+    expect(shortName('<Subject 3>')).toBe('<Subject 3>');
+    expect(shortName('')).toBe('Speaker');
   });
 });

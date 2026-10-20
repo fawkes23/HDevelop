@@ -58,6 +58,11 @@ and a **timeline** (bottom).
 - **Background** and **Music** run under the whole video.
 - **Viewer**: type what the camera sees straight onto the frame. Play steps through the video in real time,
   with subtitles and a hint of the camera move.
+- **New** (top bar): start a blank project, or paste an existing H3 prompt and it is rebuilt as a timeline
+  (shots, cut times, camera moves, dialogue lanes, sound, and for reference prompts the labels and summary).
+  Pasting with Ctrl/⌘+V outside a text field does the same; into a blank project it loads straight away.
+  Prompts carry no image or file links, so add those afterwards. On start, a message says whether you are looking at
+  your last saved project or the example.
 - **Format** (top bar): starting point, length, frame shape and look. **Prompt** opens the compiled prompt,
   the checks and the H3-Base request. **Project** holds examples, import and export.
 - **Keyboard**: Tab to a clip, arrows to move between clips, Alt+arrows to reorder, Enter to edit, Delete to remove
