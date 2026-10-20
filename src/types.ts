@@ -52,6 +52,10 @@ export type Action =
   | { t: 'setAsset'; id: string; url: string }
   | { t: 'delAsset'; id: string }
   | { t: 'addRow'; row: Row }
+  | { t: 'insertRow'; row: Row; index: number }
+  | { t: 'delRows'; ids: string[] }
+  /** Move a whole shot (its Shot row and the rows under it); cut times stay in timeline order. */
+  | { t: 'moveShot'; from: number; to: number }
   | { t: 'field'; id: string; key: string; value: string }
   | { t: 'toggle'; id: string }
   | { t: 'move'; id: string; to: number }
@@ -63,6 +67,11 @@ export interface Issue {
   level: 'error' | 'warn' | 'info';
   message: string;
   rowId?: string;
+  /**
+   * Where to show the message: a field key of the row when `rowId` is set,
+   * otherwise a whole-prompt area such as "duration", "soundscape" or "asset:<id>".
+   */
+  field?: string;
   fix?: { label: string; action: Action };
 }
 

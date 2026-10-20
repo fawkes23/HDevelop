@@ -134,7 +134,7 @@ describe('lint', () => {
   it('cut times: required, strictly increasing, inside the video', () => {
     const s = ex('t2va');
     s.rows.push(mk('shot', { at: '', text: 'a wide shot.' }));
-    expect(has(s, 'error', 'need a cut time')).toBe(true);
+    expect(has(s, 'error', 'need a start time')).toBe(true);
     s.rows[s.rows.length - 1].f.at = '4';
     expect(has(s, 'error', 'strictly increase')).toBe(true);
     s.rows[s.rows.length - 1].f.at = '9';

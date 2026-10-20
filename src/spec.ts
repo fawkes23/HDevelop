@@ -12,7 +12,11 @@ import type { ModeId, RowType } from './types';
 
 export interface ModeSpec {
   id: ModeId;
+  /** The skill's code for the mode. */
   label: string;
+  /** Plain-language name and one-line description for the interface. */
+  title: string;
+  description: string;
   help: string;
   needsFirst: boolean;
   needsLast: boolean;
@@ -23,6 +27,8 @@ export const MODES: ModeSpec[] = [
   {
     id: 't2va',
     label: 'T2VA',
+    title: 'Text to video',
+    description: 'Describe everything in words.',
     help: 'Text only. Build the full audiovisual timeline from text. No image-alignment instruction.',
     needsFirst: false,
     needsLast: false,
@@ -31,6 +37,8 @@ export const MODES: ModeSpec[] = [
   {
     id: 'i2va',
     label: 'I2VA',
+    title: 'Start from an image',
+    description: 'Your image becomes the first frame.',
     help: '<Picture 1> is the first frame at 0.00 s. Anchor on it, then describe the action onset, development and result.',
     needsFirst: true,
     needsLast: false,
@@ -39,6 +47,8 @@ export const MODES: ModeSpec[] = [
   {
     id: 'fl2va',
     label: 'FL2VA',
+    title: 'Start and end images',
+    description: 'Two images become the first and last frames.',
     help: 'Picture 1 opens, Picture 2 ends. Describe the continuous path between them. Generally a single shot.',
     needsFirst: true,
     needsLast: true,
@@ -47,6 +57,8 @@ export const MODES: ModeSpec[] = [
   {
     id: 'l2va',
     label: 'L2VA',
+    title: 'End on an image',
+    description: 'Your image becomes the last frame.',
     help: '<Picture 1> is the last frame of the final shot. Infer a plausible opening and converge onto it.',
     needsFirst: false,
     needsLast: true,
@@ -55,6 +67,8 @@ export const MODES: ModeSpec[] = [
   {
     id: 'ref2va',
     label: 'Ref2VA',
+    title: 'Reference materials',
+    description: 'Guide the video with pictures, videos and audio.',
     help: 'Full-reference mode: subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music.',
     needsFirst: false,
     needsLast: false,
@@ -97,61 +111,61 @@ export interface Opt {
  * written as a natural English action after "The camera".
  */
 export const CAMERA_MOTION: Opt[] = [
-  { value: 'Zoom In', label: 'Zoom In', phrase: 'zooms in' },
-  { value: 'Zoom Out', label: 'Zoom Out', phrase: 'zooms out' },
-  { value: 'Push In', label: 'Push In', phrase: 'pushes in' },
-  { value: 'Pull Out', label: 'Pull Out', phrase: 'pulls out' },
-  { value: 'Pan Left', label: 'Pan Left', phrase: 'pans left' },
-  { value: 'Pan Right', label: 'Pan Right', phrase: 'pans right' },
-  { value: 'Truck Left', label: 'Truck Left', phrase: 'trucks left' },
-  { value: 'Truck Right', label: 'Truck Right', phrase: 'trucks right' },
-  { value: 'Tilt Up', label: 'Tilt Up', phrase: 'tilts up' },
-  { value: 'Tilt Down', label: 'Tilt Down', phrase: 'tilts down' },
-  { value: 'Pedestal Up', label: 'Pedestal Up', phrase: 'pedestals up' },
-  { value: 'Pedestal Down', label: 'Pedestal Down', phrase: 'pedestals down' },
-  { value: 'Arc Shot', label: 'Arc Shot', phrase: 'moves in an arc shot' },
-  { value: 'Tracking Shot', label: 'Tracking Shot', phrase: 'follows in a tracking shot' },
-  { value: 'Static Shot', label: 'Static Shot', phrase: 'holds a static shot' },
-  { value: 'Shake Slightly', label: 'Shake Slightly', phrase: 'shakes slightly' },
-  { value: 'Shake Strongly', label: 'Shake Strongly', phrase: 'shakes strongly' },
-  { value: 'POV', label: 'POV', phrase: 'takes a POV shot' },
-  { value: 'Roll Clockwise', label: 'Roll Clockwise', phrase: 'rolls clockwise' },
-  { value: 'Roll Counterclockwise', label: 'Roll Counterclockwise', phrase: 'rolls counterclockwise' },
+  { value: 'Zoom In', label: 'Zoom in (lens magnifies)', phrase: 'zooms in' },
+  { value: 'Zoom Out', label: 'Zoom out (lens widens)', phrase: 'zooms out' },
+  { value: 'Push In', label: 'Push in (camera moves closer)', phrase: 'pushes in' },
+  { value: 'Pull Out', label: 'Pull out (camera moves away)', phrase: 'pulls out' },
+  { value: 'Pan Left', label: 'Pan left (turns left)', phrase: 'pans left' },
+  { value: 'Pan Right', label: 'Pan right (turns right)', phrase: 'pans right' },
+  { value: 'Truck Left', label: 'Truck left (slides left)', phrase: 'trucks left' },
+  { value: 'Truck Right', label: 'Truck right (slides right)', phrase: 'trucks right' },
+  { value: 'Tilt Up', label: 'Tilt up (looks up)', phrase: 'tilts up' },
+  { value: 'Tilt Down', label: 'Tilt down (looks down)', phrase: 'tilts down' },
+  { value: 'Pedestal Up', label: 'Pedestal up (rises)', phrase: 'pedestals up' },
+  { value: 'Pedestal Down', label: 'Pedestal down (lowers)', phrase: 'pedestals down' },
+  { value: 'Arc Shot', label: 'Arc (circles the subject)', phrase: 'moves in an arc shot' },
+  { value: 'Tracking Shot', label: 'Tracking (follows the subject)', phrase: 'follows in a tracking shot' },
+  { value: 'Static Shot', label: 'Static (stays still)', phrase: 'holds a static shot' },
+  { value: 'Shake Slightly', label: 'Shake slightly', phrase: 'shakes slightly' },
+  { value: 'Shake Strongly', label: 'Shake strongly', phrase: 'shakes strongly' },
+  { value: 'POV', label: 'Point of view (through their eyes)', phrase: 'takes a POV shot' },
+  { value: 'Roll Clockwise', label: 'Roll clockwise', phrase: 'rolls clockwise' },
+  { value: 'Roll Counterclockwise', label: 'Roll counterclockwise', phrase: 'rolls counterclockwise' },
 ];
 /** Motions where amplitude and speed have no meaning. */
 export const CAMERA_FIXED = new Set(['Static Shot', 'POV']);
 
 /** Medium amplitude and normal speed are omitted, per the guide. */
 export const AMPLITUDE: Opt[] = [
-  { value: '', label: 'medium (omitted)' },
-  { value: 'small', label: 'small', phrase: 'with small amplitude' },
-  { value: 'large', label: 'large', phrase: 'with large amplitude' },
+  { value: '', label: 'Medium' },
+  { value: 'small', label: 'Small', phrase: 'with small amplitude' },
+  { value: 'large', label: 'Large', phrase: 'with large amplitude' },
 ];
 export const SPEED: Opt[] = [
-  { value: '', label: 'normal (omitted)' },
-  { value: 'slow', label: 'slow', phrase: 'at slow speed' },
-  { value: 'fast', label: 'fast', phrase: 'at fast speed' },
+  { value: '', label: 'Normal' },
+  { value: 'slow', label: 'Slow', phrase: 'at slow speed' },
+  { value: 'fast', label: 'Fast', phrase: 'at fast speed' },
 ];
 
 /** base-en.txt 4.2. The last three only when the user explicitly asks for them. */
 export const TRANSITIONS: Opt[] = [
-  { value: 'the camera cuts to', label: 'the camera cuts to' },
-  { value: 'the shot cuts to', label: 'the shot cuts to' },
-  { value: 'the shot transitions to', label: 'the shot transitions to' },
-  { value: 'the shot changes to', label: 'the shot changes to' },
-  { value: 'the shot switches to', label: 'the shot switches to' },
-  { value: 'the shot transitions with a cross-dissolve to', label: 'cross-dissolve (explicit request)' },
-  { value: 'the shot transitions with a fade to', label: 'fade (explicit request)' },
-  { value: 'the shot transitions with a wipe to', label: 'wipe (explicit request)' },
+  { value: 'the camera cuts to', label: 'Cut (the camera cuts to)' },
+  { value: 'the shot cuts to', label: 'Cut (the shot cuts to)' },
+  { value: 'the shot transitions to', label: 'Transition (the shot transitions to)' },
+  { value: 'the shot changes to', label: 'Change (the shot changes to)' },
+  { value: 'the shot switches to', label: 'Switch (the shot switches to)' },
+  { value: 'the shot transitions with a cross-dissolve to', label: 'Cross-dissolve (only if asked for)' },
+  { value: 'the shot transitions with a fade to', label: 'Fade (only if asked for)' },
+  { value: 'the shot transitions with a wipe to', label: 'Wipe (only if asked for)' },
 ];
 export const EXPLICIT_ONLY_TRANSITIONS = new Set(TRANSITIONS.slice(5).map((o) => o.value));
 
 /** base-en.txt 4.4: dialogue crossing a cut, or truncated by the end of the video. */
 export const CONTINUITY: Opt[] = [
-  { value: '', label: 'self-contained' },
-  { value: 'next', label: 'continues into next shot (<scenetrans>)' },
-  { value: 'prev', label: 'continued from previous shot (<scenetrans>)' },
-  { value: 'cutoff', label: 'cut off by the end of the video (<cutoff>)' },
+  { value: '', label: 'Complete line' },
+  { value: 'next', label: 'Continues into the next shot' },
+  { value: 'prev', label: 'Continues from the previous shot' },
+  { value: 'cutoff', label: 'Cut off by the end of the video' },
 ];
 
 export const PRONOUNS: Opt[] = [
@@ -163,24 +177,24 @@ export const PRONOUNS: Opt[] = [
 
 /** ref-en.txt 2: reference label kinds. */
 export const LABEL_KINDS: Opt[] = [
-  { value: 'subject', label: '<Subject N>' },
-  { value: 'picture', label: '<Picture N>' },
-  { value: 'video', label: '<Video N>' },
-  { value: 'audio', label: '<Audio N>' },
+  { value: 'subject', label: 'Subject: person, object, place or style' },
+  { value: 'picture', label: 'Picture used as an exact frame' },
+  { value: 'video', label: 'Video to edit, continue or follow' },
+  { value: 'audio', label: 'Audio to copy or follow' },
 ];
 
 /** ref-en.txt 4.1 / 4.2: fixed relationship markers. */
 export const VISUAL_MARKERS: Opt[] = [
-  { value: 'fully_preserved', label: 'fully_preserved' },
-  { value: 'partially_preserved', label: 'partially_preserved' },
-  { value: 'attribute_transfer', label: 'attribute_transfer' },
-  { value: 'weak_reference', label: 'weak_reference' },
+  { value: 'fully_preserved', label: 'Keep fully (fully_preserved)' },
+  { value: 'partially_preserved', label: 'Keep partly (partially_preserved)' },
+  { value: 'attribute_transfer', label: 'Transfer traits to someone else (attribute_transfer)' },
+  { value: 'weak_reference', label: 'Loose resemblance only (weak_reference)' },
 ];
 export const AUDIO_MARKERS: Opt[] = [
-  { value: 'fully_copy', label: 'fully_copy' },
-  { value: 'partially_copy', label: 'partially_copy' },
-  { value: 'reference', label: 'reference' },
-  { value: 'weak_reference', label: 'weak_reference' },
+  { value: 'fully_copy', label: 'Use the whole track (fully_copy)' },
+  { value: 'partially_copy', label: 'Use part of it (partially_copy)' },
+  { value: 'reference', label: 'Follow its voice or style only (reference)' },
+  { value: 'weak_reference', label: 'Loose resemblance only (weak_reference)' },
 ];
 
 /** ref-en.txt 3: summary task types. */
@@ -217,6 +231,14 @@ export interface FieldSpec {
   showIf?: { key: string; values: string[] };
   hideIf?: { key: string; values: string[] };
   grow?: boolean;
+  /** Short explanation shown under the label. */
+  hint?: string;
+  /** Shown under "More options" instead of always. */
+  advanced?: boolean;
+  /** Render a select as a row of buttons. */
+  control?: 'segmented';
+  /** Takes little horizontal space (short codes and numbers). */
+  narrow?: boolean;
 }
 
 export interface BlockSpec {
@@ -224,6 +246,8 @@ export interface BlockSpec {
   label: string;
   color: string;
   hint: string;
+  /** Lucide icon name, resolved in the interface. */
+  icon: string;
   fields: FieldSpec[];
 }
 
@@ -234,113 +258,148 @@ export const BLOCKS: Record<RowType, BlockSpec> = {
     type: 'shot',
     label: 'Shot',
     color: '#0f766e',
-    hint: 'Starts [Shot N]: composition and what is in frame. Later shots need a strictly increasing cut time',
+    icon: 'Film',
+    hint: 'A new camera angle or moment. Every shot after the first starts at a later time',
     fields: [
-      { key: 'at', label: 'Cut at (s)', kind: 'number', placeholder: '3.5' },
-      { key: 'transition', label: 'Cut', kind: 'select', options: TRANSITIONS, default: TRANSITIONS[0].value },
+      { key: 'at', label: 'Starts at', kind: 'number', placeholder: '3.5', hint: 'Seconds from the start of the video' },
+      { key: 'transition', label: 'How it begins', kind: 'select', options: TRANSITIONS, default: TRANSITIONS[0].value, advanced: true },
       {
         key: 'text',
-        label: 'Composition',
+        label: 'What the camera sees',
         kind: 'long',
         placeholder: 'a medium-wide shot frames a baker opening the shutters of a small street bakery before sunrise.',
+        hint: 'Shot size, who or what is in frame, and where',
         grow: true,
       },
     ],
   },
   visual: {
     type: 'visual',
-    label: 'Visual',
-    color: '#d97706',
-    hint: 'Subjects, appearance, environment, lighting, actions and reactions, as seen in this shot',
-    fields: [{ key: 'text', label: 'Visual', kind: 'long', placeholder: 'She folds the letter along its existing crease.', grow: true }],
+    label: 'Action',
+    color: '#b45309',
+    icon: 'Eye',
+    hint: 'What people and things do, how they look, the place and the light',
+    fields: [{ key: 'text', label: 'What happens', kind: 'long', placeholder: 'She folds the letter along its existing crease.', grow: true }],
   },
   camera: {
     type: 'camera',
-    label: 'Camera',
-    color: '#0284c7',
-    hint: 'Motion type + amplitude + speed, written as a natural English action',
+    label: 'Camera move',
+    color: '#0e7490',
+    icon: 'Video',
+    hint: 'How the camera moves, how far and how fast',
     fields: [
-      { key: 'motion', label: 'Motion', kind: 'select', options: CAMERA_MOTION, default: 'Push In' },
-      { key: 'amplitude', label: 'Amplitude', kind: 'select', options: AMPLITUDE, default: '', hideIf: { key: 'motion', values: [...CAMERA_FIXED] } },
-      { key: 'speed', label: 'Speed', kind: 'select', options: SPEED, default: '', hideIf: { key: 'motion', values: [...CAMERA_FIXED] } },
-      { key: 'detail', label: 'Toward / while', kind: 'text', placeholder: 'toward the folded letter in her hands', grow: true },
+      { key: 'motion', label: 'Movement', kind: 'select', options: CAMERA_MOTION, default: 'Push In', grow: true },
+      { key: 'amplitude', label: 'How far', kind: 'select', control: 'segmented', options: AMPLITUDE, default: '', hideIf: { key: 'motion', values: [...CAMERA_FIXED] } },
+      { key: 'speed', label: 'How fast', kind: 'select', control: 'segmented', options: SPEED, default: '', hideIf: { key: 'motion', values: [...CAMERA_FIXED] } },
+      { key: 'detail', label: 'Toward or while', kind: 'text', placeholder: 'toward the folded letter in her hands', hint: 'Finishes the sentence "The camera pushes in…"', grow: true },
     ],
   },
   speech: {
     type: 'speech',
-    label: 'Speech',
-    color: '#059669',
-    hint: 'Dialogue, singing or voiceover with a stable speaker ID (S1), wrapped in <d>[Language] …</d>',
+    label: 'Dialogue',
+    color: '#15803d',
+    icon: 'MessageSquareQuote',
+    hint: 'Someone speaks, sings or narrates. Words are kept exactly as typed',
     fields: [
-      { key: 'who', label: 'Speaker', kind: 'text', placeholder: 'The young woman with a quiet, breathy voice' },
-      { key: 'id', label: 'ID', kind: 'text', placeholder: 'S1', default: 'S1' },
-      { key: 'voiceover', label: 'Voice', kind: 'select', default: '', options: [{ value: '', label: 'on-screen' }, { value: 'yes', label: 'off-screen voiceover' }] },
-      { key: 'verb', label: 'Action + verb', kind: 'text', placeholder: 'says:', default: 'says:', hideIf: { key: 'voiceover', values: ['yes'] } },
-      { key: 'pronoun', label: 'Lips', kind: 'select', options: PRONOUNS, default: 'their', showIf: { key: 'voiceover', values: ['yes'] } },
-      { key: 'lang', label: 'Language', kind: 'text', placeholder: 'English', default: 'English' },
-      { key: 'line', label: 'Words (verbatim)', kind: 'long', placeholder: 'I get off at the next station.', grow: true },
-      { key: 'continuity', label: 'Across cuts', kind: 'select', options: CONTINUITY, default: '' },
+      { key: 'who', label: 'Who speaks', kind: 'text', placeholder: 'The young woman with a quiet, breathy voice', hint: 'Describe them and their voice the first time they speak', grow: true },
+      { key: 'id', label: 'Speaker ID', kind: 'text', placeholder: 'S1', default: 'S1', hint: 'S1, S2… in speaking order', narrow: true },
+      { key: 'line', label: 'Words', kind: 'long', placeholder: 'I get off at the next station.', grow: true },
+      { key: 'verb', label: 'How they say it', kind: 'text', placeholder: 'says:', default: 'says:', hint: 'Text between the ID and the words, e.g. "whispers:"', advanced: true, hideIf: { key: 'voiceover', values: ['yes'] } },
+      { key: 'lang', label: 'Language', kind: 'text', placeholder: 'English', default: 'English', advanced: true },
+      {
+        key: 'voiceover',
+        label: 'Voice',
+        kind: 'select',
+        default: '',
+        control: 'segmented',
+        advanced: true,
+        options: [
+          { value: '', label: 'Seen speaking' },
+          { value: 'yes', label: 'Voiceover' },
+        ],
+      },
+      { key: 'pronoun', label: 'Whose lips stay closed', kind: 'select', options: PRONOUNS, default: 'their', advanced: true, showIf: { key: 'voiceover', values: ['yes'] } },
+      { key: 'continuity', label: 'Line across shots', kind: 'select', options: CONTINUITY, default: '', advanced: true },
     ],
   },
   sound: {
     type: 'sound',
     label: 'Sound',
-    color: '#16a34a',
-    hint: 'Diegetic sound synchronized to this shot (an impact, a ringing phone, a radio the characters hear)',
-    fields: [{ key: 'text', label: 'Sound', kind: 'long', placeholder: 'The entrance bell rings once.', grow: true }],
+    color: '#4d7c0f',
+    icon: 'Volume2',
+    hint: 'A sound the characters hear at this moment, like a bell or a radio',
+    fields: [{ key: 'text', label: 'What you hear', kind: 'long', placeholder: 'The entrance bell rings once.', grow: true }],
   },
   text: {
     type: 'text',
     label: 'On-screen text',
-    color: '#9333ea',
-    hint: 'Visible banner, sign, label, subtitle or neon text, quoted verbatim in its original language',
+    color: '#be185d',
+    icon: 'Type',
+    hint: 'A sign, label or subtitle visible in the frame, kept in its original language',
     fields: [
-      { key: 'before', label: 'Before', kind: 'text', placeholder: 'A red neon sign reading' },
-      { key: 'text', label: 'Text (verbatim)', kind: 'text', placeholder: '营业中' },
-      { key: 'after', label: 'After', kind: 'text', placeholder: 'glows above the doorway.', grow: true },
+      { key: 'before', label: 'Where it appears', kind: 'text', placeholder: 'A red neon sign reading', grow: true },
+      { key: 'text', label: 'Exact text', kind: 'text', placeholder: '营业中', grow: true },
+      { key: 'after', label: 'Then', kind: 'text', placeholder: 'glows above the doorway.', grow: true },
     ],
   },
   define: {
     type: 'define',
     label: 'Reference label',
-    color: '#db2777',
-    hint: 'Ref2VA only: one line in subject_definitions and one in retention_analysis',
+    color: '#9f1239',
+    icon: 'Tag',
+    hint: 'Names something from your files so shots can refer to it',
     fields: [
-      { key: 'kind', label: 'Label', kind: 'select', options: LABEL_KINDS, default: 'subject' },
+      { key: 'kind', label: 'What it is', kind: 'select', options: LABEL_KINDS, default: 'subject' },
       {
         key: 'asset',
-        label: 'Asset',
+        label: 'File',
         kind: 'asset',
         showIf: { key: 'kind', values: ['picture', 'video', 'audio'] },
         assetKindBy: { key: 'kind', map: { picture: 'image', video: 'video', audio: 'audio' } },
       },
-      { key: 'def', label: '… is', kind: 'long', placeholder: 'the young woman in <Picture 1>, with long dark hair, a blue cardigan, and a thin silver necklace.', grow: true },
+      {
+        key: 'def',
+        label: 'Description',
+        kind: 'long',
+        placeholder: 'the young woman in <Picture 1>, with long dark hair, a blue cardigan, and a thin silver necklace.',
+        hint: 'Continues "<Subject 1> is …". Name the source files and the features to follow',
+        grow: true,
+      },
+      { key: 'marker', label: 'How closely to follow it', kind: 'select', optionsBy: { key: 'kind', map: MARKERS_BY_KIND }, default: 'fully_preserved' },
+      { key: 'note', label: 'What is kept', kind: 'text', placeholder: 'her identity, long dark hair and blue cardigan are retained.', grow: true },
       {
         key: 'where',
-        label: 'Parenthetical',
+        label: 'Where it is used',
         kind: 'text',
-        placeholder: 'subject: auto "appears in [Shot N]" · picture: [Shot 1] first frame · video: cut and pacing structure',
+        placeholder: 'subject: worked out from the shots · picture: [Shot 1] first frame · video: cut and pacing structure',
+        hint: 'Written in brackets after the label in retention_analysis',
+        advanced: true,
+        grow: true,
         showIf: { key: 'kind', values: ['subject', 'picture', 'video'] },
       },
-      { key: 'marker', label: 'Marker', kind: 'select', optionsBy: { key: 'kind', map: MARKERS_BY_KIND }, default: 'fully_preserved' },
-      { key: 'note', label: 'Retention', kind: 'text', placeholder: 'her identity, long dark hair and blue cardigan are retained.', grow: true },
     ],
   },
   raw: {
     type: 'raw',
     label: 'Raw text',
-    color: '#475569',
-    hint: 'Escape hatch: inserted into the current shot exactly as written',
+    color: '#57534e',
+    icon: 'Code',
+    hint: 'Anything the other blocks can’t express, inserted exactly as written',
     fields: [{ key: 'text', label: 'Text', kind: 'long', placeholder: 'Anything, inserted as written', grow: true }],
   },
   comment: {
     type: 'comment',
-    label: 'Comment',
-    color: '#94a3b8',
-    hint: 'A note to yourself. Never added to the prompt',
-    fields: [{ key: 'text', label: 'Note', kind: 'text', placeholder: 'Try a slower push-in next time', grow: true }],
+    label: 'Note to self',
+    color: '#78716c',
+    icon: 'StickyNote',
+    hint: 'Never added to the prompt',
+    fields: [{ key: 'text', label: 'Note', kind: 'long', placeholder: 'Try a slower push-in next time', grow: true }],
   },
 };
+
+/** Blocks offered inside a shot, most common first. */
+export const SHOT_BLOCKS: RowType[] = ['visual', 'camera', 'speech', 'sound'];
+export const MORE_SHOT_BLOCKS: RowType[] = ['text', 'raw', 'comment'];
 
 export const BLOCK_ORDER: RowType[] = ['shot', 'visual', 'camera', 'speech', 'sound', 'text', 'define', 'raw', 'comment'];
 

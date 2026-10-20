@@ -35,6 +35,15 @@ export function reducer(s: State, a: Action): State {
       };
     case 'addRow':
       return { ...s, rows: [...s.rows, a.row] };
+    case 'insertRow': {
+      const rows = s.rows.slice();
+      rows.splice(Math.max(0, Math.min(rows.length, a.index)), 0, a.row);
+      return { ...s, rows };
+    }
+    case 'delRows':
+      return { ...s, rows: s.rows.filter((r) => !a.ids.includes(r.id)) };
+    case 'moveShot':
+      return moveShot(s, a.from, a.to);
     case 'field':
       return { ...s, rows: s.rows.map((r) => (r.id === a.id ? { ...r, f: dependents(r, { ...r.f, [a.key]: a.value }, a.key) } : r)) };
     case 'toggle':
@@ -62,6 +71,28 @@ export function reducer(s: State, a: Action): State {
     case 'load':
       return a.state;
   }
+}
+
+/**
+ * Reorder shot groups. Reference labels keep their relative order (they compile
+ * on their own), and cut times stay where they were on the timeline, so moving a
+ * shot earlier swaps its place in the sequence rather than its timestamp.
+ */
+function moveShot(s: State, from: number, to: number): State {
+  const groups: Row[][] = [];
+  const defines: Row[] = [];
+  for (const r of s.rows) {
+    if (r.type === 'define') defines.push(r);
+    else if (r.type === 'shot' || !groups.length) groups.push([r]);
+    else groups[groups.length - 1].push(r);
+  }
+  if (from < 0 || from >= groups.length || to < 0 || to >= groups.length || from === to) return s;
+  if (groups.some((g) => g[0].type !== 'shot')) return s; // implicit first shot: nothing safe to swap
+  const times = groups.map((g) => g[0].f.at ?? '');
+  const [moved] = groups.splice(from, 1);
+  groups.splice(to, 0, moved);
+  const reordered = groups.map((g, i) => [{ ...g[0], f: { ...g[0].f, at: times[i] } }, ...g.slice(1)]);
+  return { ...s, rows: [...defines, ...reordered.flat()] };
 }
 
 /** Reset fields whose options depend on the field that just changed (e.g. marker on label kind). */
